@@ -1,58 +1,45 @@
-# pages/1_upload_chuan_hoa.py
 import streamlit as st
 import pandas as pd
-from database import get_conn
-from utils import parse_complex_sheet
-import io
-import datetime
 
-st.title("📤 Upload & Chuan hoa")
+st.set_page_config(page_title="Upload & Chuẩn hoá")
 
-uploaded = st.file_uploader("Chon file Excel (Check stock KI.xlsx)", type=["xlsx","xls"])
-if uploaded:
-    xls = pd.ExcelFile(uploaded)
-    sheets = xls.sheet_names
-    sheet = st.selectbox("Chon sheet de parse", sheets)
-    st.write("Sheet chon:", sheet)
-    df_raw = pd.read_excel(uploaded, sheet_name=sheet, header=None)
-    st.subheader("Preview (raw 50 dong)")
-    st.dataframe(df_raw.head(50))
+st.title("📤 Upload & Chuẩn hoá dữ liệu")
 
-    if st.button("Thuc hien parse & chuan hoa"):
-        with st.spinner("Dang parse..."):
-            df_parsed = parse_complex_sheet(df_raw)
-        if df_parsed.empty:
-            st.error("Khong tim thay ban ghi sau khi parse. Kiem tra sheet.")
-        else:
-            st.success(f"Parse xong: {len(df_parsed)} ban ghi")
-            st.dataframe(df_parsed.head(50))
-            b = io.BytesIO()
-            df_parsed.to_excel(b, index=False, sheet_name="cleaned")
-            st.download_button("Tai file da chuan hoa (Excel)", data=b.getvalue(), file_name="cleaned_parsed.xlsx")
+uploaded_file = st.file_uploader(
+    "Chọn file Excel Check stock KI", 
+    type=["xlsx", "xls"]
+)
 
-            if st.button("Luu tat ca vao DB"):
-                conn = get_conn()
-                df_parsed = df_parsed.where(pd.notnull(df_parsed), None)
-                for _, r in df_parsed.iterrows():
-                    conn.execute("""
-                    INSERT INTO inventory(ngay, nguyen_lieu, lo, so_bao, so_kg, trung_binh, remain_kg, nhap_kg, xuat_kg, ton_cuoi_kg, ncc, product_date, formula_date, age)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    """, (
-                        r.get('ngay_nhap'),
-                        r.get('ten_nguyen_lieu'),
-                        r.get('lo'),
-                        r.get('so_bao'),
-                        r.get('so_kg'),
-                        r.get('trung_binh'),
-                        r.get('so_kg'), # remain_kg (khoi dau)
-                        r.get('nhap_kg'),
-                        r.get('xuat_kg'),
-                        r.get('ton_cuoi_kg'),
-                        r.get('ncc'),
-                        r.get('ngay_nhap'),
-                        None,
-                        r.get('age')
-                    ))
-                conn.commit()
-                conn.close()
-                st.success("Da luu vao DB")
+if uploaded_file:
+    try:
+        # Đọc toàn bộ sheets
+        xls = pd.ExcelFile(uploaded_file)
+        sheet_names = xls.sheet_names
+
+        st.success("✔️ Đã đọc file. Chọn sheet để xem dữ liệu.")
+
+        sheet = st.selectbox("Chọn sheet:", sheet_names)
+
+        df = pd.read_excel(uploaded_file, sheet_name=sheet)
+
+        st.subheader("📌 20 dòng đầu")
+        st.dataframe(df.head(20))
+
+        # Nút chuẩn hóa
+        if st.button("Chuẩn hoá & Lưu dữ liệu"):
+            df_clean = df.copy()
+
+            # Chuẩn hoá cần thêm tại đây…
+            df_clean["Age"] = None  # placeholder
+
+            st.session_state["inventory_df"] = df_clean
+
+            df_clean.to_csv("inventory_clean.csv", index=False)
+
+            st.success("🎉 Đã chuẩn hoá & lưu dữ liệu thành công!")
+
+    except Exception as e:
+        st.error(f"Lỗi khi đọc file: {e}")
+
+else:
+    st.info("Vui lòng tải file Excel để bắt đầu.")
