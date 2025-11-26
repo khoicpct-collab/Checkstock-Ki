@@ -4,3 +4,8 @@ numpy
 openpyxl
 xlsxwriter
 fpdf
+python-dateutil
+pytz
+sqlalchemy
+supabase
+reportlab
