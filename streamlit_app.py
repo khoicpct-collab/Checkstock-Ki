@@ -1,108 +1,72 @@
 # ======================================
-# MODULE 4 — DASHBOARD THỐNG KÊ KHO
+# MODULE 5 — AI GỢI Ý ĐẶT HÀNG
 # ======================================
 
-import altair as alt
+ai_tab = st.tabs(["🧠 AI Gợi ý đặt hàng"])[0]
 
-dash_tab = st.tabs(["📊 Dashboard"])[0]
-
-with dash_tab:
-    st.header("📊 Dashboard Thống Kê Kho")
+with ai_tab:
+    st.header("🧠 AI Gợi Ý Đặt Hàng Tự Động")
 
     df = get_materials()
 
     if df.empty:
-        st.warning("❗Chưa có dữ liệu trong kho.")
+        st.warning("❗Chưa có dữ liệu để phân tích.")
     else:
+        st.write("Hệ thống AI sẽ tính toán tốc độ tiêu thụ, dự báo tồn kho và đề xuất mức đặt hàng.")
 
-        # ------------------------
-        # TÍNH TOÁN SUMMARY
-        # ------------------------
-        tong_nguyen_lieu = df["ten_nguyen_lieu"].nunique()
-        tong_lo = df["lo"].nunique()
-        tong_kg = df["khoi_luong_kg"].sum()
-        tong_bao = df["so_bao"].sum()
+        # Chuẩn hoá ngày
+        df["ngay_nhap"] = pd.to_datetime(df["ngay_nhap"], errors="coerce")
 
-        col1, col2, col3, col4 = st.columns(4)
+        # Cho chọn lead time
+        lead_time = st.number_input("⏱ Lead-time (ngày giao hàng)", 1, 60, 7)
 
-        col1.metric("🧪 Số nguyên liệu", tong_nguyen_lieu)
-        col2.metric("📦 Số lô", tong_lo)
-        col3.metric("⚖ Tổng khối lượng (kg)", f"{tong_kg:,.2f}")
-        col4.metric("🎒 Tổng số bao", int(tong_bao))
-
-        st.divider()
-
-        # ------------------------
-        # BIỂU ĐỒ TỒN KHO THEO NGUYÊN LIỆU
-        # ------------------------
-        st.subheader("📉 Tồn kho theo nguyên liệu")
-
-        df_group = df.groupby("ten_nguyen_lieu")["khoi_luong_kg"].sum().reset_index()
-
-        bar_chart = (
-            alt.Chart(df_group)
-            .mark_bar()
-            .encode(
-                x="ten_nguyen_lieu",
-                y="khoi_luong_kg",
-                tooltip=["ten_nguyen_lieu", "khoi_luong_kg"]
-            )
-            .properties(height=400)
+        # Tính Daily Usage theo nguyên liệu
+        usage = (
+            df.groupby("ten_nguyen_lieu")["khoi_luong_kg"]
+            .diff(periods=-1) * -1  # tự tính xuất (nếu xuất nằm trong dòng sau)
         )
-        st.altair_chart(bar_chart, use_container_width=True)
 
-        st.divider()
+        df["xuat_tinh"] = usage
+        df["xuat_tinh"] = df["xuat_tinh"].apply(lambda x: x if x > 0 else 0)
 
-        # ------------------------
-        # BIỂU ĐỒ NHẬP – XUẤT THEO NGÀY
-        # ------------------------
-        st.subheader("📆 Biểu đồ nhập – xuất theo ngày")
+        daily_usage = df.groupby("ten_nguyen_lieu")["xuat_tinh"].mean().reset_index()
+        daily_usage.rename(columns={"xuat_tinh": "daily_usage"}, inplace=True)
 
-        df_time = df.copy()
-        df_time["ngay_nhap"] = pd.to_datetime(df_time["ngay_nhap"], errors="coerce")
-        df_time["date"] = df_time["ngay_nhap"].dt.date
+        # Lấy tồn kho hiện tại
+        ton = df.groupby("ten_nguyen_lieu")["khoi_luong_kg"].sum().reset_index()
+        ton.rename(columns={"khoi_luong_kg": "ton_cuoi"}, inplace=True)
 
-        line_chart = (
-            alt.Chart(df_time)
-            .mark_line(point=True)
-            .encode(
-                x="date:T",
-                y="khoi_luong_kg:Q",
-                color="ten_nguyen_lieu:N",
-                tooltip=["ten_nguyen_lieu", "khoi_luong_kg", "date"]
-            )
-            .properties(height=350)
-        )
-        st.altair_chart(line_chart, use_container_width=True)
+        # Gộp
+        result = ton.merge(daily_usage, on="ten_nguyen_lieu", how="left")
 
-        st.divider()
+        # Xử lý khi thiếu dữ liệu
+        result["daily_usage"] = result["daily_usage"].fillna(0.01)
 
-        # ------------------------
-        # CẢNH BÁO HÀNG QUÁ LÂU
-        # ------------------------
-        st.subheader("🚨 Cảnh báo tồn lâu")
+        # Tính số ngày còn
+        result["remaining_days"] = result["ton_cuoi"] / result["daily_usage"]
 
-        df_alert = df[df["age"] > 60]   # >60 ngày
+        # Dự đoán số ngày cần tính
+        forecast_days = st.number_input("🔮 Số ngày dự báo nhu cầu", 1, 120, 30)
 
-        if df_alert.empty:
-            st.success("✔ Không có nguyên liệu tồn kho quá lâu (Age > 60 ngày)")
-        else:
-            st.error("⚠ Có nguyên liệu tồn lâu hơn 60 ngày!")
-            st.dataframe(df_alert)
+        # Tính gợi ý đặt hàng
+        result["reorder_qty"] = result["daily_usage"] * forecast_days - result["ton_cuoi"]
+        result["reorder_qty"] = result["reorder_qty"].apply(lambda x: x if x > 0 else 0)
 
-        st.divider()
+        # Cảnh báo
+        def warning_level(days):
+            if days < lead_time:
+                return "🔴 Đặt ngay"
+            elif days < lead_time * 1.5:
+                return "🟠 Theo dõi"
+            else:
+                return "🟢 An toàn"
 
-        # ------------------------
-        # LỌC CHI TIẾT
-        # ------------------------
-        st.subheader("🔎 Lọc chi tiết")
+        result["status"] = result["remaining_days"].apply(warning_level)
 
-        ten_list = ["Tất cả"] + sorted(df["ten_nguyen_lieu"].unique().tolist())
-        pick_ten = st.selectbox("Chọn nguyên liệu", ten_list)
+        st.subheader("📌 Kết quả phân tích")
 
-        if pick_ten != "Tất cả":
-            df_filter = df[df["ten_nguyen_lieu"] == pick_ten]
-        else:
-            df_filter = df
+        st.dataframe(result)
 
-        st.dataframe(df_filter)
+        # Lọc nhanh
+        st.subheader("🔎 Lọc nguyên liệu cần đặt ngay")
+        st.dataframe(result[result["status"] == "🔴 Đặt ngay"])
