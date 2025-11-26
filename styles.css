@@ -1,36 +1,18 @@
-html, body, [class*="css"]  {
-    font-family: 'Segoe UI', sans-serif;
+/* styles.css - theme gom sidebar + button + font */
+html, body, [class*="css"] {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
 }
-
-/* Sidebar */
 section[data-testid="stSidebar"] {
     background-color: #1f2a44 !important;
     color: white !important;
 }
-
 button[kind="primary"] {
     background-color:#2e86de !important;
     color:white !important;
     border-radius:6px !important;
     padding:8px 20px;
-    font-size:16px;
+    font-size:14px;
 }
-
-button[kind="primary"]:hover {
-    background-color:#1b4f72 !important;
-}
-
 .block-container {
-    padding-top: 2rem;
-}
-
-.dataframe {
-    background:white;
-    border-radius:8px;
-    padding:10px;
-}
-
-h1, h2, h3 {
-    color:#1f2a44 !important;
-    font-weight:650;
+    padding-top: 1.2rem;
 }
