@@ -3,90 +3,76 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 
-st.set_page_config(page_title="Quan Ly Ton Kho", layout="wide")
+st.title("NHAP LIEU NGUYEN LIEU")
 
-# Tao ket noi SQLite
-def init_db():
-    conn = sqlite3.connect("stock.db")
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS stock_detailed (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        material_name TEXT,
-        group_name TEXT,
-        loai_bao TEXT,
-        trong_luong_bao REAL,
-        don_vi TEXT,
-        location TEXT,
-        so_bao INTEGER,
-        so_kg REAL,
-        avg_kg_per_bao REAL,
-        ngay_nhap TEXT,
-        product_date TEXT,
-        age_days INTEGER
-    )
-    """)
-    conn.commit()
-    return conn
+def get_conn():
+    return sqlite3.connect("stock.db", check_same_thread=False)
 
-conn = init_db()
+conn = get_conn()
 
-st.title("HE THONG QUAN LY TON KHO - MODULE 1")
-st.subheader("UPLOAD FILE - PREVIEW - CHUAN HOA - LUU DATABASE")
+# Lay danh sach nguyen lieu
+@st.cache_data
+def load_materials():
+    df = pd.read_sql("SELECT DISTINCT material_name FROM stock_detailed ORDER BY material_name", conn)
+    return df["material_name"].tolist()
 
-uploaded = st.file_uploader("Tai file Excel", type=["xlsx"])
+materials = load_materials()
 
-def clean_material_name(name):
-    if pd.isna(name):
-        return ""
-    name = str(name).strip().upper()
-    name = name.replace("  ", " ")
-    return name
+# AUTOCOMPLETE
+material = st.selectbox("Chon nguyen lieu", materials)
 
-def tinh_age(ngay_nhap):
-    try:
-        d = pd.to_datetime(ngay_nhap, errors="coerce")
-        if pd.isna(d):
-            return None
-        return (pd.Timestamp.today() - d).days
-    except:
-        return None
+if material:
+    st.subheader(f"Thong tin cac lo cua: {material}")
 
-if uploaded:
-    df = pd.read_excel(uploaded)
-    st.write("Xem truoc 30 dong:")
-    st.dataframe(df.head(30))
+    query = """
+    SELECT * FROM stock_detailed
+    WHERE material_name = ?
+    ORDER BY location
+    """
+    df = pd.read_sql(query, conn, params=[material])
+    st.dataframe(df)
 
-    st.subheader("Tien hanh chuan hoa du lieu")
+    st.markdown("---")
+    st.subheader("NHAP THEM LO HOAC THEM TON")
 
-    # Bo sung ten nguyen lieu
-    if "material_name" not in df.columns:
-        st.error("File Excel chua co cot material_name. Ban can gui file mau dung.")
-    else:
-        df["material_name"] = df["material_name"].apply(clean_material_name)
+    # Chon lo
+    list_lo = ["TAO LO MOI"] + sorted(df["location"].unique().tolist())
+    lo = st.selectbox("Chon lo", list_lo)
 
-    # Tinh tuoi ton kho
-    if "ngay_nhap" in df.columns:
-        df["age_days"] = df["ngay_nhap"].apply(tinh_age)
-    else:
-        df["age_days"] = None
+    so_bao = st.number_input("So bao nhap", value=0, step=1)
+    so_kg = st.number_input("So kg nhap", value=0.0, step=1.0)
 
-    st.success("Da chuan hoa truoc khi luu")
+    ngay_nhap = st.date_input("Ngay nhap", datetime.today())
+    ngay_sx = st.date_input("Ngay san xuat", datetime.today())
 
-    st.write("Xem lai du lieu da chuan hoa:")
-    st.dataframe(df.head(20))
+    ncc = st.text_input("Nha cung cap")
+    code = st.text_input("Code")
+    ghi_chu = st.text_area("Ghi chu")
 
-    # Nut luu
-    if st.button("Luu vao SQLite"):
-        df_to_save = df[[
-            "material_name", "group_name", "loai_bao", "trong_luong_bao",
-            "don_vi", "location", "so_bao", "so_kg",
-            "avg_kg_per_bao", "ngay_nhap", "product_date", "age_days"
-        ]]
+    # Tinh avg
+    avg = None
+    if so_bao != 0:
+        avg = so_kg / so_bao
 
-        df_to_save.to_sql("stock_detailed", conn, if_exists="append", index=False)
+    # Tuoi
+    age_days = (datetime.today().date() - ngay_nhap).days
 
-        st.success("Da luu vao database SQLite thanh cong!")
+    if st.button("Luu du lieu"):
+        new_row = pd.DataFrame([{
+            "material_name": material,
+            "group_name": None,
+            "loai_bao": None,
+            "trong_luong_bao": None,
+            "don_vi": "kg",
+            "location": lo,
+            "so_bao": so_bao,
+            "so_kg": so_kg,
+            "avg_kg_per_bao": avg,
+            "ngay_nhap": str(ngay_nhap),
+            "product_date": str(ngay_sx),
+            "age_days": age_days
+        }])
+
+        new_row.to_sql("stock_detailed", conn, if_exists="append", index=False)
+        st.success("Da luu thanh cong!")
         st.balloons()
-
-st.markdown("---")
-st.info("Module 1 hoan tat. Nhan tin de bat dau Module 2 – Nhap lieu theo ten nguyen lieu.")
