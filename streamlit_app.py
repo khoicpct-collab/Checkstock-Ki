@@ -1,72 +1,63 @@
-# ======================================
-# MODULE 5 — AI GỢI Ý ĐẶT HÀNG
-# ======================================
+# -----------------------
+# MODULE 9 - XUAT BAO CAO (EXCEL + PDF)
+# -----------------------
+import io
+import xlsxwriter
+from fpdf import FPDF
 
-ai_tab = st.tabs(["🧠 AI Gợi ý đặt hàng"])[0]
+with st.expander("MODULE 9 - Xuat bao cao tong hop"):
+    st.header("Xuat bao cao: Excel & PDF")
 
-with ai_tab:
-    st.header("🧠 AI Gợi Ý Đặt Hàng Tự Động")
-
-    df = get_materials()
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT * FROM warehouse", conn)
+    conn.close()
 
     if df.empty:
-        st.warning("❗Chưa có dữ liệu để phân tích.")
+        st.info("Chua co du lieu de xuat.")
     else:
-        st.write("Hệ thống AI sẽ tính toán tốc độ tiêu thụ, dự báo tồn kho và đề xuất mức đặt hàng.")
+        # filters
+        ten = st.selectbox("Chon nguyen lieu (Tat ca de xuat toan bo)", ["Tat ca"] + sorted(df["ten_nguyen_lieu"].unique().tolist()))
+        date_from = st.date_input("Tu ngay", value=None, key="r_from")
+        date_to = st.date_input("Den ngay", value=None, key="r_to")
 
-        # Chuẩn hoá ngày
-        df["ngay_nhap"] = pd.to_datetime(df["ngay_nhap"], errors="coerce")
+        dff = df.copy()
+        if ten != "Tat ca":
+            dff = dff[dff["ten_nguyen_lieu"] == ten]
+        # optional date filter
+        try:
+            if date_from:
+                dff = dff[pd.to_datetime(dff["ngay_nhap"], errors="coerce").dt.date >= date_from]
+            if date_to:
+                dff = dff[pd.to_datetime(dff["ngay_nhap"], errors="coerce").dt.date <= date_to]
+        except:
+            pass
 
-        # Cho chọn lead time
-        lead_time = st.number_input("⏱ Lead-time (ngày giao hàng)", 1, 60, 7)
+        st.dataframe(dff.head(200))
 
-        # Tính Daily Usage theo nguyên liệu
-        usage = (
-            df.groupby("ten_nguyen_lieu")["khoi_luong_kg"]
-            .diff(periods=-1) * -1  # tự tính xuất (nếu xuất nằm trong dòng sau)
-        )
+        # Export Excel
+        if st.button("Xuat Excel"):
+            towrite = io.BytesIO()
+            writer = pd.ExcelWriter(towrite, engine='xlsxwriter')
+            dff.to_excel(writer, index=False, sheet_name='BaoCao')
+            writer.close()
+            towrite.seek(0)
+            st.download_button("Tai file Excel", data=towrite, file_name="baocao_tonkho.xlsx")
 
-        df["xuat_tinh"] = usage
-        df["xuat_tinh"] = df["xuat_tinh"].apply(lambda x: x if x > 0 else 0)
-
-        daily_usage = df.groupby("ten_nguyen_lieu")["xuat_tinh"].mean().reset_index()
-        daily_usage.rename(columns={"xuat_tinh": "daily_usage"}, inplace=True)
-
-        # Lấy tồn kho hiện tại
-        ton = df.groupby("ten_nguyen_lieu")["khoi_luong_kg"].sum().reset_index()
-        ton.rename(columns={"khoi_luong_kg": "ton_cuoi"}, inplace=True)
-
-        # Gộp
-        result = ton.merge(daily_usage, on="ten_nguyen_lieu", how="left")
-
-        # Xử lý khi thiếu dữ liệu
-        result["daily_usage"] = result["daily_usage"].fillna(0.01)
-
-        # Tính số ngày còn
-        result["remaining_days"] = result["ton_cuoi"] / result["daily_usage"]
-
-        # Dự đoán số ngày cần tính
-        forecast_days = st.number_input("🔮 Số ngày dự báo nhu cầu", 1, 120, 30)
-
-        # Tính gợi ý đặt hàng
-        result["reorder_qty"] = result["daily_usage"] * forecast_days - result["ton_cuoi"]
-        result["reorder_qty"] = result["reorder_qty"].apply(lambda x: x if x > 0 else 0)
-
-        # Cảnh báo
-        def warning_level(days):
-            if days < lead_time:
-                return "🔴 Đặt ngay"
-            elif days < lead_time * 1.5:
-                return "🟠 Theo dõi"
-            else:
-                return "🟢 An toàn"
-
-        result["status"] = result["remaining_days"].apply(warning_level)
-
-        st.subheader("📌 Kết quả phân tích")
-
-        st.dataframe(result)
-
-        # Lọc nhanh
-        st.subheader("🔎 Lọc nguyên liệu cần đặt ngay")
-        st.dataframe(result[result["status"] == "🔴 Đặt ngay"])
+        # Export PDF (simple table)
+        if st.button("Xuat PDF"):
+            pdf = FPDF("L","mm","A4")
+            pdf.add_page()
+            pdf.set_font("Arial", size=10)
+            pdf.cell(0,10, "Bao cao ton kho", ln=True)
+            # simple table write (first 30 rows)
+            for i,row in dff.head(30).iterrows():
+                line = f"{row.get('ten_nguyen_lieu','')[:20]:20} | {str(row.get('lo','')):8} | {row.get('khoi_luong_kg',0):10,.2f}"
+                pdf.cell(0,6,line,ln=True)
+            # return file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                pdf.output(tmp.name)
+                tmp.seek(0)
+                data = open(tmp.name,"rb").read()
+                b64 = base64.b64encode(data).decode()
+                href = f'<a href="data:application/octet-stream;base64,{b64}" download="baocao.pdf">Tai PDF</a>'
+                st.markdown(href, unsafe_allow_html=True)
