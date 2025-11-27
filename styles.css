@@ -1,18 +1,45 @@
-/* styles.css - theme gom sidebar + button + font */
-html, body, [class*="css"] {
-    font-family: 'Segoe UI', Tahoma, sans-serif;
+/* Custom Styles for Checkstock System */
+.main {
+    padding: 2rem;
 }
-section[data-testid="stSidebar"] {
-    background-color: #1f2a44 !important;
-    color: white !important;
+
+.stButton > button {
+    width: 100%;
+    border-radius: 8px;
+    height: 3rem;
+    font-weight: 600;
 }
-button[kind="primary"] {
-    background-color:#2e86de !important;
-    color:white !important;
-    border-radius:6px !important;
-    padding:8px 20px;
-    font-size:14px;
+
+.stSelectbox, .stTextInput, .stNumberInput, .stDateInput {
+    margin-bottom: 1rem;
 }
-.block-container {
-    padding-top: 1.2rem;
+
+/* Card styles */
+.card {
+    padding: 1.5rem;
+    border-radius: 10px;
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin: 1rem 0;
+}
+
+/* Table styles */
+.dataframe {
+    width: 100%;
+}
+
+/* Metric cards */
+[data-testid="metric-container"] {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+/* Form styles */
+.stForm {
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 2rem;
+    background-color: #fafafa;
 }
