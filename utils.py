@@ -1,25 +1,18 @@
 import pandas as pd
-from datetime import datetime
 
-def clean_excel(df):
-    df = df.rename(columns=lambda x: x.strip())
-    df = df.loc[:, df.columns.notna()]
+def clean_inventory_dataframe(df):
+    df = df.copy()
 
-    # Chuyển ngày
-    for c in ["product_date", "formula_date", "Ngay"]:
-        if c in df.columns:
-            df[c] = pd.to_datetime(df[c], errors="coerce")
+    df.columns = (
+        df.columns.astype(str)
+        .str.strip()
+        .str.replace(" ", "_")
+        .str.lower()
+    )
 
-    # Tính age = Today – Ngay nhập
-    today = pd.Timestamp.today()
-    if "Ngay" in df.columns:
-        df["age"] = (today - df["Ngay"]).dt.days
-
-    # Trung bình = kg / bao
-    if "so_kg" in df.columns and "so_bao" in df.columns:
-        df["trung_binh"] = df.apply(
-            lambda r: r["so_kg"]/r["so_bao"] if (r["so_bao"] and r["so_bao"]>0) else None,
-            axis=1
-        )
+    # Chuẩn hoá cột ngày (nếu có)
+    if "ngay_nhap" in df.columns:
+        df["ngay_nhap"] = pd.to_datetime(df["ngay_nhap"], errors="coerce")
+        df["age"] = (pd.Timestamp.today() - df["ngay_nhap"]).dt.days
 
     return df
