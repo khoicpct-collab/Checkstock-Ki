@@ -1,31 +1,30 @@
 import sqlite3
+import pandas as pd
 
-def get_conn():
-    return sqlite3.connect("inventory.db", check_same_thread=False)
+DB = "inventory.db"
 
 def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS inventory (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ngay DATE,
-        nguyen_lieu TEXT,
-        lo TEXT,
-        so_bao INTEGER,
-        so_kg REAL,
-        trung_binh REAL,
-        remain_kg REAL,
-        nhap_kg REAL,
-        xuat_kg REAL,
-        ton_cuoi_kg REAL,
-        ncc TEXT,
-        product_date DATE,
-        formula_date DATE,
-        age INTEGER
-    );
+    conn = sqlite3.connect(DB)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ngay_nhap TEXT,
+            ten_nguyen_lieu TEXT,
+            lo TEXT,
+            so_bao REAL,
+            khoiluong REAL,
+            age INTEGER
+        )
     """)
-
-    conn.commit()
     conn.close()
+
+def save_dataframe(df, table):
+    conn = sqlite3.connect(DB)
+    df.to_sql(table, conn, if_exists="replace", index=False)
+    conn.close()
+
+def load_table(table):
+    conn = sqlite3.connect(DB)
+    df = pd.read_sql(f"SELECT * FROM {table}", conn)
+    conn.close()
+    return df
